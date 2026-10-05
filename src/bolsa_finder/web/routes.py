@@ -4,11 +4,21 @@ import os
 import tempfile
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, HTTPException, UploadFile
 
+from bolsa_finder.funding import fetch_all_automated_opportunities, opportunities_for_target_level
 from bolsa_finder.lattes import check_staleness, parse_lattes_pdf, parse_lattes_xml
 from bolsa_finder.profile import TARGET_LEVEL_DESCRIPTIONS
-from bolsa_finder.web.schemas import LattesParseResponse, TargetLevelOption
+from bolsa_finder.report import build_report, render_markdown
+from bolsa_finder.web.schemas import (
+    ApplicableFundingRequest,
+    ApplicableFundingResponse,
+    LattesParseResponse,
+    ReportRequest,
+    ReportResponse,
+    TargetLevelOption,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -60,4 +70,27 @@ async def parse_lattes(file: UploadFile) -> LattesParseResponse:
         extract=extract,
         staleness_warning=check_staleness(extract),
         reliability_warning=reliability_warning,
+    )
+
+
+def _fetch_automated_sources() -> list:
+    with httpx.Client(timeout=30.0) as client:
+        return fetch_all_automated_opportunities(client)
+
+
+@router.post("/funding/applicable", response_model=ApplicableFundingResponse)
+def applicable_funding(request: ApplicableFundingRequest) -> ApplicableFundingResponse:
+    opportunities = opportunities_for_target_level(_fetch_automated_sources(), request.target_level)
+    return ApplicableFundingResponse(target_level=request.target_level, opportunities=opportunities)
+
+
+@router.post("/report", response_model=ReportResponse)
+def build_candidate_report(request: ReportRequest) -> ReportResponse:
+    opportunities = opportunities_for_target_level(
+        _fetch_automated_sources(), request.profile.target_level
+    )
+    report = build_report(opportunities, fit_scores=[])
+    return ReportResponse(
+        markdown=render_markdown(report),
+        json_report=report.model_dump(mode="json"),
     )
