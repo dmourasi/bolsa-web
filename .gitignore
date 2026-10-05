@@ -1,0 +1,9 @@
+knowledge-base/
+profile.yaml
+*.pdf
+fixtures/private/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/

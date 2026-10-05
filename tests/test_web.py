@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from bolsa_finder.funding import FundingOpportunity
-from bolsa_finder.profile import TARGET_LEVEL_DESCRIPTIONS
-from bolsa_finder.web import routes
-from bolsa_finder.web.app import create_app
+from bolsa_core.funding import FundingOpportunity
+from bolsa_core.profile import TARGET_LEVEL_DESCRIPTIONS
+from bolsa_web.web import routes
+from bolsa_web.web.app import create_app
 
 FIXTURE_XML = Path(__file__).parent / "fixtures" / "lattes_sample.xml"
 

@@ -7,11 +7,11 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, HTTPException, UploadFile
 
-from bolsa_finder.funding import fetch_all_automated_opportunities, opportunities_for_target_level
-from bolsa_finder.lattes import check_staleness, parse_lattes_pdf, parse_lattes_xml
-from bolsa_finder.profile import TARGET_LEVEL_DESCRIPTIONS
-from bolsa_finder.report import build_report, render_markdown
-from bolsa_finder.web.schemas import (
+from bolsa_core.funding import fetch_all_automated_opportunities, opportunities_for_target_level
+from bolsa_core.lattes import check_staleness, parse_lattes_pdf, parse_lattes_xml
+from bolsa_core.profile import TARGET_LEVEL_DESCRIPTIONS
+from bolsa_core.report import build_report, render_markdown
+from bolsa_web.web.schemas import (
     ApplicableFundingRequest,
     ApplicableFundingResponse,
     LattesParseResponse,

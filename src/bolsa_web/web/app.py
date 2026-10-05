@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-from bolsa_finder.web.routes import router
+from bolsa_web.web.routes import router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "web_static"
 

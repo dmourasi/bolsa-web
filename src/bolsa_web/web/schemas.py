@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from bolsa_finder.funding import FundingOpportunity
-from bolsa_finder.lattes import LattesExtract
-from bolsa_finder.profile import Profile, TargetLevel
+from bolsa_core.funding import FundingOpportunity
+from bolsa_core.lattes import LattesExtract
+from bolsa_core.profile import Profile, TargetLevel
 
 
 class TargetLevelOption(BaseModel):
