@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bolsas para pós-graduação</title>
 <style>
-  :root { --fg:#1d1d1f; --muted:#5f6368; --line:#d7d9dc; --accent:#1a5fb4; --warn:#8a5a00; --warnbg:#fff4d6; }
-  @media (prefers-color-scheme: dark) {
-    :root { --fg:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --accent:#8ab4f8; --warn:#f5c26b; --warnbg:#3a2f12; }
-  }
-  body { font-family: system-ui, sans-serif; color: var(--fg); margin: 0; padding: 16px; max-width: 760px; margin-inline: auto; line-height: 1.5; }
+  :root { color-scheme: light; --fg:#1d1d1f; --muted:#5f6368; --line:#d7d9dc; --accent:#1a5fb4; --warn:#8a5a00; --warnbg:#fff4d6; }
+  body { font-family: system-ui, sans-serif; background: #ffffff; color: var(--fg); margin: 0; padding: 16px; max-width: 760px; margin-inline: auto; line-height: 1.5; }
   h1 { font-size: 1.5rem; margin: 8px 0 4px; }
   p.lead { color: var(--muted); margin-top: 0; }
   fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; padding: 12px 16px; }
@@ -170,25 +167,26 @@ function prefillFromExtract(extract) {
   if (extract.cnpq_areas && extract.cnpq_areas.values.length) {
     $("areas").value = extract.cnpq_areas.values.join("\n");
   }
-  if (extract.education && extract.education.length) {
-    const last = extract.education[extract.education.length - 1];
-    if (last.started) $("started").value = last.started;
-    if (last.finished === null) $("summary").value = `${last.level} em andamento em ${last.institution}.`;
+  // Pick the ongoing graduate entry, not just the last listed (a technical
+  // course often comes last and would give the wrong start date).
+  const current = (extract.education || []).find(
+    (e) => e.finished === null && ["mestrado", "doutorado", "pos-doutorado"].includes(e.level)
+  );
+  if (current) {
+    if (current.started) $("started").value = current.started;
+    $("summary").value = `${current.level} em andamento em ${current.institution}.`;
   }
 }
 
-$("form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  clearError();
-
-  const languages = lines($("languages")).map((line) => {
+function buildProfile() {
+  const languages = lines($("languages").value).map((line) => {
     const [language, proficiency] = line.split(":").map((s) => s.trim());
     return { language, proficiency };
   });
   const restrictions = $("restrictions").value.trim();
-  const profile = {
-    research_areas: lines($("areas")),
-    methods: lines($("methods")),
+  return {
+    research_areas: lines($("areas").value),
+    methods: lines($("methods").value),
     cv_summary: $("summary").value.trim(),
     academic_stage: {
       program_started: $("started").value,
@@ -204,11 +202,17 @@ $("form").addEventListener("submit", async (event) => {
       ...($("latest").value ? { latest_start: $("latest").value } : {}),
     },
   };
+}
+
+$("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
 
   const button = $("submit");
   button.disabled = true;
   button.textContent = "Buscando nas fontes...";
   try {
+    const profile = buildProfile();
     const response = await fetch("/api/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
