@@ -194,3 +194,12 @@ def test_report_rejects_invalid_profile(client: TestClient, fixed_sources) -> No
     response = client.post("/api/report", json={"profile": payload})
 
     assert response.status_code == 422
+
+
+def test_index_serves_the_single_page_app(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Bolsas para pós-graduação" in response.text
+    assert "/api/report" in response.text

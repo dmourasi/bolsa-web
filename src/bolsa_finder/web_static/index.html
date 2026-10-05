@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bolsas para pós-graduação</title>
+<style>
+  :root { --fg:#1d1d1f; --muted:#5f6368; --line:#d7d9dc; --accent:#1a5fb4; --warn:#8a5a00; --warnbg:#fff4d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8eaed; --muted:#9aa0a6; --line:#3c4043; --accent:#8ab4f8; --warn:#f5c26b; --warnbg:#3a2f12; }
+  }
+  body { font-family: system-ui, sans-serif; color: var(--fg); margin: 0; padding: 16px; max-width: 760px; margin-inline: auto; line-height: 1.5; }
+  h1 { font-size: 1.5rem; margin: 8px 0 4px; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; padding: 12px 16px; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { display: block; margin: 10px 0 4px; font-weight: 500; }
+  .hint { color: var(--muted); font-size: 0.875rem; margin: 2px 0 0; }
+  input, select, textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); }
+  textarea { min-height: 72px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .check input { width: auto; }
+  button { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; margin-top: 12px; }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  .notice { background: var(--warnbg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+  .error { color: #b3261e; margin: 8px 0; }
+  pre.report { white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 0.9rem; }
+  .hidden { display: none; }
+  .footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<h1>Bolsas para pós-graduação</h1>
+<p class="lead">Envie seu currículo Lattes e veja quais bolsas você pode aplicar. Nada do que você envia é guardado: o arquivo é processado e descartado.</p>
+
+<form id="form" novalidate>
+  <fieldset>
+    <legend>1. Currículo Lattes (opcional, preenche o formulário)</legend>
+    <input type="file" id="lattes" accept=".xml,.pdf">
+    <p class="hint">XML é mais confiável. PDF funciona, mas revise os campos.</p>
+    <div id="parseStatus" class="hidden"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. Objetivo</legend>
+    <label for="target">Nível de bolsa que você procura</label>
+    <select id="target" required></select>
+
+    <label for="started">Início do programa atual</label>
+    <input type="date" id="started" required>
+
+    <label for="defense">Previsão de defesa (se souber)</label>
+    <input type="date" id="defense">
+  </fieldset>
+
+  <fieldset>
+    <legend>3. Sua pesquisa</legend>
+    <label for="areas">Áreas de pesquisa</label>
+    <textarea id="areas" required placeholder="Uma por linha, ex.: Estatística aplicada"></textarea>
+    <p class="hint">Vem preenchido a partir do Lattes, mas são suas palavras que contam.</p>
+
+    <label for="methods">Métodos e ferramentas</label>
+    <textarea id="methods" required placeholder="Uma por linha, ex.: modelos mistos, análise de NGS"></textarea>
+
+    <label for="summary">Resumo do seu perfil</label>
+    <textarea id="summary" required placeholder="Duas ou três frases sobre você e sua formação"></textarea>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. Dados que o Lattes não traz</legend>
+    <label for="nationality">Nacionalidade</label>
+    <input type="text" id="nationality" required placeholder="ex.: brasileira">
+
+    <label for="languages">Idiomas e nível certificado</label>
+    <textarea id="languages" required placeholder="uma linha por idioma, ex.: inglês:avancado"></textarea>
+    <p class="hint">Níveis: basico, intermediario, avancado, fluente, nativo. Use o nível comprovado (certificado), não a autoavaliação.</p>
+
+    <label for="restrictions">Restrições geográficas (opcional)</label>
+    <input type="text" id="restrictions" placeholder="ex.: não quero sair da Europa">
+
+    <label for="earliest">Início mais cedo que você aceita</label>
+    <input type="date" id="earliest" required>
+
+    <label for="latest">Início mais tarde que você aceita (opcional)</label>
+    <input type="date" id="latest">
+
+    <div class="check">
+      <input type="checkbox" id="funding" checked>
+      <label for="funding" style="margin:0">Preciso de financiamento (bolsa)</label>
+    </div>
+  </fieldset>
+
+  <button type="submit" id="submit">Gerar relatório</button>
+  <div id="formError" class="error hidden"></div>
+</form>
+
+<div id="reportArea" class="hidden">
+  <h2>Bolsas que você pode aplicar</h2>
+  <div class="notice">Confirme prazo, valor e elegibilidade no edital oficial antes de qualquer decisão. Campos marcados como "unknown" não têm informação na fonte.</div>
+  <pre class="report" id="report"></pre>
+</div>
+
+<div class="footer">Fontes consultadas ao vivo a cada pedido. Sem login, sem armazenamento.</div>
+
+<script>
+const LEVEL_FALLBACK = ["mestrado", "doutorado", "sanduiche", "pleno", "posdoc"];
+const $ = (id) => document.getElementById(id);
+
+function lines(text) {
+  return text.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+
+function showError(message) {
+  const el = $("formError");
+  el.textContent = message;
+  el.classList.remove("hidden");
+}
+
+function clearError() {
+  $("formError").classList.add("hidden");
+}
+
+async function loadTargetLevels() {
+  const select = $("target");
+  let options = [];
+  try {
+    const response = await fetch("/api/target-levels");
+    options = await response.json();
+  } catch (_) {
+    options = LEVEL_FALLBACK.map((value) => ({ value, description: value }));
+  }
+  for (const option of options) {
+    const el = document.createElement("option");
+    el.value = option.value;
+    el.textContent = option.description;
+    select.appendChild(el);
+  }
+}
+
+$("lattes").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = $("parseStatus");
+  status.className = "hint";
+  status.textContent = "Lendo o currículo...";
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const response = await fetch("/api/lattes/parse", { method: "POST", body });
+    if (!response.ok) {
+      const detail = (await response.json()).detail || "Não foi possível ler o arquivo.";
+      status.className = "error";
+      status.textContent = detail;
+      return;
+    }
+    const data = await response.json();
+    prefillFromExtract(data.extract);
+    const notes = [data.reliability_warning, data.staleness_warning].filter(Boolean);
+    status.className = "notice";
+    status.textContent = notes.length ? notes.join(" ") : "Currículo lido. Revise os campos abaixo.";
+  } catch (_) {
+    status.className = "error";
+    status.textContent = "Erro de conexão ao ler o currículo.";
+  }
+});
+
+function prefillFromExtract(extract) {
+  // Only fills what the CV states. Languages are left blank on purpose:
+  // Lattes self-reported proficiency is not the certified level we need.
+  if (extract.cnpq_areas && extract.cnpq_areas.values.length) {
+    $("areas").value = extract.cnpq_areas.values.join("\n");
+  }
+  if (extract.education && extract.education.length) {
+    const last = extract.education[extract.education.length - 1];
+    if (last.started) $("started").value = last.started;
+    if (last.finished === null) $("summary").value = `${last.level} em andamento em ${last.institution}.`;
+  }
+}
+
+$("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearError();
+
+  const languages = lines($("languages")).map((line) => {
+    const [language, proficiency] = line.split(":").map((s) => s.trim());
+    return { language, proficiency };
+  });
+  const restrictions = $("restrictions").value.trim();
+  const profile = {
+    research_areas: lines($("areas")),
+    methods: lines($("methods")),
+    cv_summary: $("summary").value.trim(),
+    academic_stage: {
+      program_started: $("started").value,
+      ...($("defense").value ? { expected_defense: $("defense").value } : {}),
+    },
+    target_level: $("target").value,
+    languages,
+    nationality: $("nationality").value.trim(),
+    geographic_restrictions: restrictions ? [restrictions] : [],
+    funding_required: $("funding").checked,
+    time_window: {
+      earliest_start: $("earliest").value,
+      ...($("latest").value ? { latest_start: $("latest").value } : {}),
+    },
+  };
+
+  const button = $("submit");
+  button.disabled = true;
+  button.textContent = "Buscando nas fontes...";
+  try {
+    const response = await fetch("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile }),
+    });
+    if (!response.ok) {
+      const body = await response.json();
+      const detail = Array.isArray(body.detail)
+        ? body.detail.map((d) => `${(d.loc || []).slice(-1)[0]}: ${d.msg}`).join(" · ")
+        : body.detail;
+      showError(`Confira os campos: ${detail}`);
+      return;
+    }
+    const data = await response.json();
+    $("report").textContent = data.markdown;
+    $("reportArea").classList.remove("hidden");
+    $("reportArea").scrollIntoView({ behavior: "smooth" });
+  } catch (_) {
+    showError("Erro de conexão ao gerar o relatório. Tente de novo.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Gerar relatório";
+  }
+});
+
+loadTargetLevels();
+</script>
+</body>
+</html>
