@@ -18,6 +18,11 @@ def create_app() -> FastAPI:
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
 
+    # Liveness only: no external source is queried, so the platform's health check stays cheap.
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
     return app
 
 

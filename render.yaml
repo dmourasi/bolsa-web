@@ -1,0 +1,12 @@
+# Render blueprint: deploys this repository straight from git.
+# No secrets live here. Set any future secret in the Render dashboard.
+services:
+  - type: web
+    name: bolsa-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
