@@ -9,8 +9,9 @@ from bolsa_core.lattes import LattesExtract
 from bolsa_core.positions import Position
 from bolsa_core.profile import Profile, TargetLevel
 
-# Each keyword costs outbound requests to third-party job boards (see
-# routes._search_positions), so both bounds are part of the trust boundary.
+# The keywords are forwarded to a third-party job board as a search query
+# (see routes._search_positions), so both bounds are part of the trust
+# boundary.
 MAX_KEYWORDS = 5
 MAX_KEYWORD_LENGTH = 60
 
@@ -56,3 +57,6 @@ class PositionSearchRequest(BaseModel):
 class PositionSearchResponse(BaseModel):
     keywords: list[str]
     positions: list[Position]
+    # One entry per source request that failed. Empty `positions` with an
+    # empty list here means "nothing matched"; with entries, "couldn't ask".
+    source_errors: list[str]

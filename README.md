@@ -25,13 +25,18 @@ uv run pytest                    # testes
 | POST | `/api/lattes/parse` | Lê um Lattes (XML ou PDF, até 10 MB) |
 | POST | `/api/funding/applicable` | Fontes automatizadas filtradas por nível |
 | POST | `/api/report` | Relatório em Markdown e JSON para um perfil |
-| POST | `/api/positions/search` | Vagas individuais no EURAXESS e no Science Careers por palavra-chave (1 a 5, de 2 a 60 caracteres) |
+| POST | `/api/positions/search` | Vagas individuais no Science Careers por palavra-chave (1 a 5, de 2 a 60 caracteres) |
 
-A busca de vagas faz pedidos a sites de terceiros a cada chamada. Os limites
-de palavras-chave (`web/schemas.py`) e de páginas por fonte (`web/routes.py`)
-são fixos no servidor para conter esse volume. Vagas não trazem verificação de
-elegibilidade para brasileiros: `eligibility_note` só vem preenchido quando a
-fonte declara a restrição.
+A busca de vagas faz um pedido ao Science Careers a cada chamada, com os
+limites de palavras-chave (`web/schemas.py`) e de resultados
+(`web/routes.py`) fixos no servidor. Se o pedido falha, a resposta traz a
+falha em `source_errors` em vez de parecer uma busca sem resultados. Vagas não
+trazem verificação de elegibilidade para brasileiros: `eligibility_note` só
+vem preenchido quando a fonte declara a restrição.
+
+O EURAXESS não é consultado aqui: desde novembro de 2026 ele recusa (403)
+qualquer busca filtrada ou paginada, sobrando só as 10 vagas mais recentes,
+sem relação com as palavras-chave. O buscador continua no `bolsa-core`.
 
 ## Privacidade
 

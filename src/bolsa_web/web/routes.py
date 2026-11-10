@@ -9,11 +9,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from bolsa_core.funding import fetch_all_automated_opportunities, opportunities_for_target_level
 from bolsa_core.lattes import check_staleness, parse_lattes_pdf, parse_lattes_xml
-from bolsa_core.positions import (
-    Position,
-    fetch_euraxess_positions,
-    fetch_sciencecareers_positions,
-)
+from bolsa_core.positions import Position, fetch_sciencecareers_positions
 from bolsa_core.profile import TARGET_LEVEL_DESCRIPTIONS
 from bolsa_core.report import build_report, render_markdown
 from bolsa_web.web.schemas import (
@@ -36,12 +32,16 @@ PDF_RELIABILITY_WARNING = (
     "projetos e publicações antes de usar."
 )
 
-# Server-fixed, never client-supplied: together with schemas.MAX_KEYWORDS
-# these cap how many outbound requests one call to this public endpoint
-# can trigger. EURAXESS fetches one detail page per listing, so one result
-# page (10 listings) per keyword keeps the worst case around 60 requests.
+# Server-fixed, never client-supplied. Science Careers takes all keywords
+# in a single search request, so one call to this public endpoint triggers
+# exactly one outbound request.
+#
+# EURAXESS is deliberately not queried here: since 2026-11 it refuses any
+# filtered or paginated search with a 403 anti-bot page (see bolsa-core's
+# positions.py), leaving only its 10 newest listings regardless of the
+# keywords -- about a dozen outbound requests per call for close to no
+# relevant result.
 SCIENCECAREERS_LIMIT = 25
-EURAXESS_PAGES = 1
 
 
 @router.get("/target-levels", response_model=list[TargetLevelOption])
@@ -110,17 +110,21 @@ def build_candidate_report(request: ReportRequest) -> ReportResponse:
     )
 
 
-def _search_positions(keywords: list[str]) -> list[Position]:
+def _search_positions(keywords: list[str]) -> tuple[list[Position], list[str]]:
+    """Return the listings found plus one message per source request that failed."""
+    errors: list[str] = []
     with httpx.Client(timeout=30.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        return [
-            *fetch_sciencecareers_positions(client, keywords, limit=SCIENCECAREERS_LIMIT),
-            *fetch_euraxess_positions(client, keywords, pages=EURAXESS_PAGES),
-        ]
+        positions = fetch_sciencecareers_positions(
+            client, keywords, limit=SCIENCECAREERS_LIMIT, errors=errors
+        )
+    return positions, errors
 
 
 @router.post("/positions/search", response_model=PositionSearchResponse)
 def search_positions(request: PositionSearchRequest) -> PositionSearchResponse:
+    positions, source_errors = _search_positions(request.keywords)
     return PositionSearchResponse(
         keywords=request.keywords,
-        positions=_search_positions(request.keywords),
+        positions=positions,
+        source_errors=source_errors,
     )

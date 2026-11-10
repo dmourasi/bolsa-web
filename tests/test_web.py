@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -224,9 +225,9 @@ def _position(title: str, source: str) -> Position:
 def recorded_position_search(monkeypatch) -> list[list[str]]:
     calls: list[list[str]] = []
 
-    def fake_search(keywords: list[str]) -> list[Position]:
+    def fake_search(keywords: list[str]) -> tuple[list[Position], list[str]]:
         calls.append(keywords)
-        return [_position("Postdoc in Statistics", "euraxess")]
+        return [_position("Postdoc in Statistics", "sciencecareers")], []
 
     monkeypatch.setattr(routes, "_search_positions", fake_search)
     return calls
@@ -241,6 +242,43 @@ def test_positions_search_returns_listings(client: TestClient, recorded_position
     assert body["positions"][0]["title"] == "Postdoc in Statistics"
     assert body["positions"][0]["url"] == "https://example.com/job/1"
     assert body["positions"][0]["eligibility_note"] is None
+    assert body["source_errors"] == []
+
+
+def test_positions_search_reports_a_source_that_failed(client: TestClient, monkeypatch) -> None:
+    failure = "sciencecareers: search request failed (HTTP 500)"
+    monkeypatch.setattr(routes, "_search_positions", lambda keywords: ([], [failure]))
+
+    response = client.post("/api/positions/search", json={"keywords": ["statistics"]})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "keywords": ["statistics"],
+        "positions": [],
+        "source_errors": [failure],
+    }
+
+
+def test_search_positions_queries_science_careers_once_and_collects_failures(monkeypatch) -> None:
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        return httpx.Response(503)
+
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        routes.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler)),
+    )
+
+    positions, errors = routes._search_positions(["statistics", "microbiome"])
+
+    assert positions == []
+    assert errors == ["sciencecareers: search request failed (HTTP 503)"]
+    assert len(requested) == 1
+    assert "sciencecareers.org" in requested[0]
 
 
 def test_positions_search_strips_keywords_before_searching(

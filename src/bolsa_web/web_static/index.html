@@ -104,10 +104,10 @@
 <form id="positionsForm" novalidate>
   <fieldset>
     <legend>Vagas abertas (opcional)</legend>
-    <p class="hint">Além das bolsas, procure vagas individuais de doutorado e pós-doutorado no EURAXESS e no Science Careers. Não depende do formulário acima.</p>
+    <p class="hint">Além das bolsas, procure vagas individuais no Science Careers (AAAS). Não depende do formulário acima.</p>
     <label for="keywords">Palavras-chave em inglês</label>
     <textarea id="keywords" required placeholder="Uma por linha, ex.: statistics"></textarea>
-    <p class="hint">Até 5. O Science Careers pesquisa pelo termo; no EURAXESS só as vagas mais recentes são verificadas.</p>
+    <p class="hint">Até 5. Todas vão juntas numa única pesquisa.</p>
     <button type="submit" id="positionsSubmit">Buscar vagas</button>
     <div id="positionsError" class="error hidden"></div>
   </fieldset>
@@ -116,7 +116,8 @@
 <div id="positionsArea" class="hidden">
   <h2>Vagas encontradas</h2>
   <div class="notice">Os sites de vagas raramente informam restrição de nacionalidade ou visto. Confira a elegibilidade e o prazo na página da vaga.</div>
-  <p id="positionsEmpty" class="hint hidden">Nenhuma vaga encontrada para essas palavras-chave, ou as fontes não responderam. Tente termos mais gerais.</p>
+  <div id="positionsSourceError" class="error hidden">A fonte de vagas não respondeu agora, então esta lista pode estar incompleta. Tente de novo em alguns minutos.</div>
+  <p id="positionsEmpty" class="hint hidden">Nenhuma vaga encontrada para essas palavras-chave. Tente termos mais gerais.</p>
   <ul class="positions" id="positions"></ul>
 </div>
 
@@ -264,7 +265,7 @@ $("form").addEventListener("submit", async (event) => {
 const SOURCE_LABELS = { euraxess: "EURAXESS", sciencecareers: "Science Careers" };
 const MAX_KEYWORDS = 5;
 
-function renderPositions(positions) {
+function renderPositions(positions, sourceErrors) {
   const list = $("positions");
   list.replaceChildren();
   for (const position of positions) {
@@ -298,7 +299,10 @@ function renderPositions(positions) {
     }
     list.appendChild(item);
   }
-  $("positionsEmpty").classList.toggle("hidden", positions.length > 0);
+  const sourceFailed = sourceErrors.length > 0;
+  $("positionsSourceError").classList.toggle("hidden", !sourceFailed);
+  // "Nothing matched" is only a fair claim when the source actually answered.
+  $("positionsEmpty").classList.toggle("hidden", positions.length > 0 || sourceFailed);
   $("positionsArea").classList.remove("hidden");
   $("positionsArea").scrollIntoView({ behavior: "smooth" });
 }
@@ -318,7 +322,7 @@ $("positionsForm").addEventListener("submit", async (event) => {
 
   const button = $("positionsSubmit");
   button.disabled = true;
-  button.textContent = "Buscando vagas (pode levar cerca de um minuto)...";
+  button.textContent = "Buscando vagas...";
   try {
     const response = await fetch("/api/positions/search", {
       method: "POST",
@@ -328,7 +332,8 @@ $("positionsForm").addEventListener("submit", async (event) => {
     if (!response.ok) {
       return fail("Confira as palavras-chave: cada uma deve ter entre 2 e 60 caracteres.");
     }
-    renderPositions((await response.json()).positions);
+    const data = await response.json();
+    renderPositions(data.positions, data.source_errors);
   } catch (_) {
     fail("Erro de conexão ao buscar vagas. Tente de novo.");
   } finally {
