@@ -5,9 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bolsa_core.funding import FundingOpportunity
+from bolsa_core.positions import Position
 from bolsa_core.profile import TARGET_LEVEL_DESCRIPTIONS
 from bolsa_web.web import routes
 from bolsa_web.web.app import create_app
+from bolsa_web.web.schemas import MAX_KEYWORD_LENGTH, MAX_KEYWORDS
 
 FIXTURE_XML = Path(__file__).parent / "fixtures" / "lattes_sample.xml"
 
@@ -203,3 +205,72 @@ def test_index_serves_the_single_page_app(client: TestClient) -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "Bolsas para pós-graduação" in response.text
     assert "/api/report" in response.text
+
+
+def _position(title: str, source: str) -> Position:
+    return Position(
+        title=title,
+        organisation="Test University",
+        country="Testland",
+        position_type="unknown",
+        url="https://example.com/job/1",
+        source=source,
+        consulted_at=date(2026, 1, 1),
+        matched_terms=["statistics"],
+    )
+
+
+@pytest.fixture
+def recorded_position_search(monkeypatch) -> list[list[str]]:
+    calls: list[list[str]] = []
+
+    def fake_search(keywords: list[str]) -> list[Position]:
+        calls.append(keywords)
+        return [_position("Postdoc in Statistics", "euraxess")]
+
+    monkeypatch.setattr(routes, "_search_positions", fake_search)
+    return calls
+
+
+def test_positions_search_returns_listings(client: TestClient, recorded_position_search) -> None:
+    response = client.post("/api/positions/search", json={"keywords": ["statistics"]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["keywords"] == ["statistics"]
+    assert body["positions"][0]["title"] == "Postdoc in Statistics"
+    assert body["positions"][0]["url"] == "https://example.com/job/1"
+    assert body["positions"][0]["eligibility_note"] is None
+
+
+def test_positions_search_strips_keywords_before_searching(
+    client: TestClient, recorded_position_search
+) -> None:
+    client.post("/api/positions/search", json={"keywords": ["  microbiome  ", "statistics"]})
+
+    assert recorded_position_search == [["microbiome", "statistics"]]
+
+
+@pytest.mark.parametrize(
+    "keywords",
+    [
+        [],
+        ["   "],
+        ["a"],
+        ["x" * (MAX_KEYWORD_LENGTH + 1)],
+        ["statistics"] * (MAX_KEYWORDS + 1),
+    ],
+)
+def test_positions_search_rejects_out_of_bounds_keywords(
+    client: TestClient, recorded_position_search, keywords: list[str]
+) -> None:
+    response = client.post("/api/positions/search", json={"keywords": keywords})
+
+    assert response.status_code == 422
+    assert recorded_position_search == []
+
+
+def test_index_offers_the_position_search(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert "/api/positions/search" in response.text

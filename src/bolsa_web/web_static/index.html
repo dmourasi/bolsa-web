@@ -22,6 +22,10 @@
   .notice { background: var(--warnbg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
   .error { color: #b3261e; margin: 8px 0; }
   pre.report { white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 0.9rem; }
+  .positions { list-style: none; padding: 0; margin: 12px 0; }
+  .positions li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
+  .positions a { color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
+  .positions .meta { color: var(--muted); font-size: 0.875rem; margin: 2px 0 0; }
   .hidden { display: none; }
   .footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
 </style>
@@ -95,6 +99,25 @@
   <h2>Bolsas que você pode aplicar</h2>
   <div class="notice">Confirme prazo, valor e elegibilidade no edital oficial antes de qualquer decisão. Campos marcados como "unknown" não têm informação na fonte.</div>
   <pre class="report" id="report"></pre>
+</div>
+
+<form id="positionsForm" novalidate>
+  <fieldset>
+    <legend>Vagas abertas (opcional)</legend>
+    <p class="hint">Além das bolsas, procure vagas individuais de doutorado e pós-doutorado no EURAXESS e no Science Careers. Não depende do formulário acima.</p>
+    <label for="keywords">Palavras-chave em inglês</label>
+    <textarea id="keywords" required placeholder="Uma por linha, ex.: statistics"></textarea>
+    <p class="hint">Até 5. O Science Careers pesquisa pelo termo; no EURAXESS só as vagas mais recentes são verificadas.</p>
+    <button type="submit" id="positionsSubmit">Buscar vagas</button>
+    <div id="positionsError" class="error hidden"></div>
+  </fieldset>
+</form>
+
+<div id="positionsArea" class="hidden">
+  <h2>Vagas encontradas</h2>
+  <div class="notice">Os sites de vagas raramente informam restrição de nacionalidade ou visto. Confira a elegibilidade e o prazo na página da vaga.</div>
+  <p id="positionsEmpty" class="hint hidden">Nenhuma vaga encontrada para essas palavras-chave, ou as fontes não responderam. Tente termos mais gerais.</p>
+  <ul class="positions" id="positions"></ul>
 </div>
 
 <div class="footer">Fontes consultadas ao vivo a cada pedido. Sem login, sem armazenamento.</div>
@@ -235,6 +258,82 @@ $("form").addEventListener("submit", async (event) => {
   } finally {
     button.disabled = false;
     button.textContent = "Gerar relatório";
+  }
+});
+
+const SOURCE_LABELS = { euraxess: "EURAXESS", sciencecareers: "Science Careers" };
+const MAX_KEYWORDS = 5;
+
+function renderPositions(positions) {
+  const list = $("positions");
+  list.replaceChildren();
+  for (const position of positions) {
+    const item = document.createElement("li");
+    const link = document.createElement("a");
+    link.textContent = position.title;
+    // Only link out to real web URLs; anything else is shown as plain text.
+    if (/^https?:\/\//.test(position.url)) {
+      link.href = position.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+    item.appendChild(link);
+
+    const known = (value) => value && value !== "unknown";
+    const parts = [
+      SOURCE_LABELS[position.source] || position.source,
+      ...[position.organisation, position.country, position.position_type].filter(known),
+      `Prazo: ${known(position.deadline) ? position.deadline : "não informado na listagem"}`,
+    ];
+    const meta = document.createElement("p");
+    meta.className = "meta";
+    meta.textContent = parts.join(" · ");
+    item.appendChild(meta);
+
+    if (position.matched_terms.length) {
+      const matched = document.createElement("p");
+      matched.className = "meta";
+      matched.textContent = `Termos encontrados: ${position.matched_terms.join(", ")}`;
+      item.appendChild(matched);
+    }
+    list.appendChild(item);
+  }
+  $("positionsEmpty").classList.toggle("hidden", positions.length > 0);
+  $("positionsArea").classList.remove("hidden");
+  $("positionsArea").scrollIntoView({ behavior: "smooth" });
+}
+
+$("positionsForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = $("positionsError");
+  error.classList.add("hidden");
+  const fail = (message) => {
+    error.textContent = message;
+    error.classList.remove("hidden");
+  };
+
+  const keywords = lines($("keywords").value);
+  if (!keywords.length) return fail("Informe ao menos uma palavra-chave.");
+  if (keywords.length > MAX_KEYWORDS) return fail(`Use no máximo ${MAX_KEYWORDS} palavras-chave.`);
+
+  const button = $("positionsSubmit");
+  button.disabled = true;
+  button.textContent = "Buscando vagas (pode levar cerca de um minuto)...";
+  try {
+    const response = await fetch("/api/positions/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords }),
+    });
+    if (!response.ok) {
+      return fail("Confira as palavras-chave: cada uma deve ter entre 2 e 60 caracteres.");
+    }
+    renderPositions((await response.json()).positions);
+  } catch (_) {
+    fail("Erro de conexão ao buscar vagas. Tente de novo.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Buscar vagas";
   }
 });
 

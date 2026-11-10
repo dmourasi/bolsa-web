@@ -25,6 +25,13 @@ uv run pytest                    # testes
 | POST | `/api/lattes/parse` | Lê um Lattes (XML ou PDF, até 10 MB) |
 | POST | `/api/funding/applicable` | Fontes automatizadas filtradas por nível |
 | POST | `/api/report` | Relatório em Markdown e JSON para um perfil |
+| POST | `/api/positions/search` | Vagas individuais no EURAXESS e no Science Careers por palavra-chave (1 a 5, de 2 a 60 caracteres) |
+
+A busca de vagas faz pedidos a sites de terceiros a cada chamada. Os limites
+de palavras-chave (`web/schemas.py`) e de páginas por fonte (`web/routes.py`)
+são fixos no servidor para conter esse volume. Vagas não trazem verificação de
+elegibilidade para brasileiros: `eligibility_note` só vem preenchido quando a
+fonte declara a restrição.
 
 ## Privacidade
 
@@ -34,6 +41,8 @@ uv run pytest                    # testes
 - A resposta do `/api/lattes/parse` não inclui dados pessoais sensíveis
   (CPF, RG, endereço, telefone, data de nascimento).
 - As fontes de bolsa são consultadas ao vivo a cada pedido.
+- Na busca de vagas, as palavras-chave são enviadas ao Science Careers como
+  termo de pesquisa; nenhum outro dado do formulário sai do servidor.
 
 ## Estrutura
 

@@ -9,12 +9,19 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from bolsa_core.funding import fetch_all_automated_opportunities, opportunities_for_target_level
 from bolsa_core.lattes import check_staleness, parse_lattes_pdf, parse_lattes_xml
+from bolsa_core.positions import (
+    Position,
+    fetch_euraxess_positions,
+    fetch_sciencecareers_positions,
+)
 from bolsa_core.profile import TARGET_LEVEL_DESCRIPTIONS
 from bolsa_core.report import build_report, render_markdown
 from bolsa_web.web.schemas import (
     ApplicableFundingRequest,
     ApplicableFundingResponse,
     LattesParseResponse,
+    PositionSearchRequest,
+    PositionSearchResponse,
     ReportRequest,
     ReportResponse,
     TargetLevelOption,
@@ -28,6 +35,13 @@ PDF_RELIABILITY_WARNING = (
     "Extraído de PDF: menor confiabilidade que XML. Revise nome, formação, "
     "projetos e publicações antes de usar."
 )
+
+# Server-fixed, never client-supplied: together with schemas.MAX_KEYWORDS
+# these cap how many outbound requests one call to this public endpoint
+# can trigger. EURAXESS fetches one detail page per listing, so one result
+# page (10 listings) per keyword keeps the worst case around 60 requests.
+SCIENCECAREERS_LIMIT = 25
+EURAXESS_PAGES = 1
 
 
 @router.get("/target-levels", response_model=list[TargetLevelOption])
@@ -93,4 +107,20 @@ def build_candidate_report(request: ReportRequest) -> ReportResponse:
     return ReportResponse(
         markdown=render_markdown(report),
         json_report=report.model_dump(mode="json"),
+    )
+
+
+def _search_positions(keywords: list[str]) -> list[Position]:
+    with httpx.Client(timeout=30.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        return [
+            *fetch_sciencecareers_positions(client, keywords, limit=SCIENCECAREERS_LIMIT),
+            *fetch_euraxess_positions(client, keywords, pages=EURAXESS_PAGES),
+        ]
+
+
+@router.post("/positions/search", response_model=PositionSearchResponse)
+def search_positions(request: PositionSearchRequest) -> PositionSearchResponse:
+    return PositionSearchResponse(
+        keywords=request.keywords,
+        positions=_search_positions(request.keywords),
     )
