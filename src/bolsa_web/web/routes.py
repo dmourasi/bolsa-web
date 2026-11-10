@@ -33,15 +33,16 @@ PDF_RELIABILITY_WARNING = (
 )
 
 # Server-fixed, never client-supplied. Science Careers takes all keywords
-# in a single search request, so one call to this public endpoint triggers
-# exactly one outbound request.
+# in a single search request, and each returned listing's own page is then
+# fetched for its closing date and job type, so one call to this public
+# endpoint triggers at most 1 + SCIENCECAREERS_LIMIT outbound requests.
 #
 # EURAXESS is deliberately not queried here: since 2026-11 it refuses any
 # filtered or paginated search with a 403 anti-bot page (see bolsa-core's
 # positions.py), leaving only its 10 newest listings regardless of the
 # keywords -- about a dozen outbound requests per call for close to no
 # relevant result.
-SCIENCECAREERS_LIMIT = 25
+SCIENCECAREERS_LIMIT = 15
 
 
 @router.get("/target-levels", response_model=list[TargetLevelOption])
@@ -115,7 +116,11 @@ def _search_positions(keywords: list[str]) -> tuple[list[Position], list[str]]:
     errors: list[str] = []
     with httpx.Client(timeout=30.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
         positions = fetch_sciencecareers_positions(
-            client, keywords, limit=SCIENCECAREERS_LIMIT, errors=errors
+            client,
+            keywords,
+            limit=SCIENCECAREERS_LIMIT,
+            fetch_details=True,
+            errors=errors,
         )
     return positions, errors
 

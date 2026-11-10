@@ -36,7 +36,7 @@ wheels = [
 [[package]]
 name = "bolsa-core"
 version = "0.1.0"
-source = { git = "https://github.com/dmourasi/bolsa-core#fb5390ffa3a6c29b7355b8a34325685a19714cdf" }
+source = { git = "https://github.com/dmourasi/bolsa-core#7ebca6a3e146b6813c862f4c15ba2971bf95dcaf" }
 dependencies = [
     { name = "httpx" },
     { name = "lxml" },

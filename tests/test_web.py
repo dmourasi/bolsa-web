@@ -259,6 +259,38 @@ def test_positions_search_reports_a_source_that_failed(client: TestClient, monke
     }
 
 
+def test_search_positions_stays_within_the_outbound_request_budget(monkeypatch) -> None:
+    listing = "".join(
+        f'<li class="lister__item"><h3><a href="/job/{n}/x/">Job {n}</a></h3></li>'
+        for n in range(40)
+    )
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        if request.url.path == "/jobs/":
+            return httpx.Response(200, html=f"<html><body><ul>{listing}</ul></body></html>")
+        return httpx.Response(
+            200,
+            html='<dl><dt class="mds-list__key">Closing date</dt>'
+            '<dd class="mds-list__value">Dec 3, 2026</dd></dl>',
+        )
+
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        routes.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler)),
+    )
+
+    positions, errors = routes._search_positions(["statistics"])
+
+    assert len(positions) == routes.SCIENCECAREERS_LIMIT
+    assert all(p.deadline == "Dec 3, 2026" for p in positions)
+    assert errors == []
+    assert len(requested) == 1 + routes.SCIENCECAREERS_LIMIT
+
+
 def test_search_positions_queries_science_careers_once_and_collects_failures(monkeypatch) -> None:
     requested: list[str] = []
 

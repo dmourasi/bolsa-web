@@ -27,9 +27,10 @@ uv run pytest                    # testes
 | POST | `/api/report` | Relatório em Markdown e JSON para um perfil |
 | POST | `/api/positions/search` | Vagas individuais no Science Careers por palavra-chave (1 a 5, de 2 a 60 caracteres) |
 
-A busca de vagas faz um pedido ao Science Careers a cada chamada, com os
-limites de palavras-chave (`web/schemas.py`) e de resultados
-(`web/routes.py`) fixos no servidor. Se o pedido falha, a resposta traz a
+A busca de vagas faz um pedido de pesquisa ao Science Careers e depois um
+pedido por vaga devolvida (para ler prazo e tipo de vaga), no máximo 16 por
+chamada. Os limites de palavras-chave (`web/schemas.py`) e de resultados
+(`web/routes.py`) são fixos no servidor. Se o pedido falha, a resposta traz a
 falha em `source_errors` em vez de parecer uma busca sem resultados. Vagas não
 trazem verificação de elegibilidade para brasileiros: `eligibility_note` só
 vem preenchido quando a fonte declara a restrição.

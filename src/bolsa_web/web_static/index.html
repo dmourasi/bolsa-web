@@ -107,7 +107,7 @@
     <p class="hint">Além das bolsas, procure vagas individuais no Science Careers (AAAS). Não depende do formulário acima.</p>
     <label for="keywords">Palavras-chave em inglês</label>
     <textarea id="keywords" required placeholder="Uma por linha, ex.: statistics"></textarea>
-    <p class="hint">Até 5. Todas vão juntas numa única pesquisa.</p>
+    <p class="hint">Até 5. Todas vão juntas numa única pesquisa, que devolve até 15 vagas com instituição, local, tipo e prazo.</p>
     <button type="submit" id="positionsSubmit">Buscar vagas</button>
     <div id="positionsError" class="error hidden"></div>
   </fieldset>
@@ -283,7 +283,7 @@ function renderPositions(positions, sourceErrors) {
     const known = (value) => value && value !== "unknown";
     const parts = [
       SOURCE_LABELS[position.source] || position.source,
-      ...[position.organisation, position.country, position.position_type].filter(known),
+      ...[position.organisation, position.location, position.country, position.position_type].filter(known),
       `Prazo: ${known(position.deadline) ? position.deadline : "não informado na listagem"}`,
     ];
     const meta = document.createElement("p");
@@ -322,7 +322,7 @@ $("positionsForm").addEventListener("submit", async (event) => {
 
   const button = $("positionsSubmit");
   button.disabled = true;
-  button.textContent = "Buscando vagas...";
+  button.textContent = "Buscando vagas (leva uns 20 segundos)...";
   try {
     const response = await fetch("/api/positions/search", {
       method: "POST",
