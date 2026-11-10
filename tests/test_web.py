@@ -344,3 +344,16 @@ def test_index_offers_the_position_search(client: TestClient) -> None:
     response = client.get("/")
 
     assert "/api/positions/search" in response.text
+
+
+def test_index_marks_required_fields(client: TestClient) -> None:
+    text = client.get("/").text
+
+    assert "são obrigatórios" in text
+    # The asterisk is drawn by CSS from each control's `required` attribute.
+    assert "label:has(+ [required])::after" in text
+    for field_id in ["target", "started", "areas", "methods", "summary",
+                     "nationality", "languages", "earliest", "keywords"]:
+        assert f'id="{field_id}" required' in text
+    for field_id in ["defense", "restrictions", "latest", "lattes"]:
+        assert f'id="{field_id}" required' not in text
